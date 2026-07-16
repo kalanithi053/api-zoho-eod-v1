@@ -210,6 +210,9 @@ export class UsersService {
       }
     }
     this.logger.debug(`result ${JSON.stringify(results)}`);
-    return results;
+    return results?.map((v: any) => {
+      delete v.refreshToken;
+      return v;
+    });
   }
 }
