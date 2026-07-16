@@ -6,12 +6,13 @@ import { ZohoService } from "../zoho/zoho.service";
 import { User, UserSchema } from "./schemas/user.schema";
 import { UsersController } from "./users.controller";
 import { UsersService } from "./users.service";
+import { HttpExceptionFilter } from "../common/httpExceptionFilter";
 
 @Module({
   imports: [
     MongooseModule.forFeature([{ name: User.name, schema: UserSchema }]),
   ],
-  providers: [UsersService, ZohoService, ApiService, GoogleService],
+  providers: [UsersService, ZohoService, ApiService, GoogleService, HttpExceptionFilter],
   exports: [UsersService],
   controllers: [UsersController],
 })

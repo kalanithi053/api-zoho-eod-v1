@@ -5,6 +5,7 @@ import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
 import { AppModule } from "./app.module";
 import { HttpExceptionFilter } from "./common/httpExceptionFilter";
 import { ResponseInterceptor } from "./common/interceptor";
+import { GoogleService } from "./google/google.service";
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
     logger: new ConsoleLogger({
@@ -16,8 +17,10 @@ async function bootstrap() {
   const port = config.get<number>("PORT") ?? 3000;
   const nodeEnv = config.get<string>("NODE_ENV") ?? "DEV";
   app.setGlobalPrefix("api/v1");
+  const cors = config.getOrThrow<string>("CORS").split(";");
   app.enableCors({
-    origin: "*",
+    origin: cors,
+    credentials: true,
   });
 
   app.useGlobalPipes(
@@ -26,7 +29,7 @@ async function bootstrap() {
       transform: true,
     }),
   );
-  app.useGlobalFilters(new HttpExceptionFilter());
+  app.useGlobalFilters(new HttpExceptionFilter(app.get(GoogleService)));
   const swaggerConfig = new DocumentBuilder()
     .setTitle(`Eod Reportor - (${nodeEnv})`)
     .setDescription("Eod Reportor  API Documentation")
