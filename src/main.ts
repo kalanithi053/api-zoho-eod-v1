@@ -16,8 +16,10 @@ async function bootstrap() {
   const port = config.get<number>("PORT") ?? 3000;
   const nodeEnv = config.get<string>("NODE_ENV") ?? "DEV";
   app.setGlobalPrefix("api/v1");
+  const cors = config.getOrThrow<string>("CORS").split(";");
   app.enableCors({
-    origin: "*",
+    origin: cors,
+    credentials: true,
   });
 
   app.useGlobalPipes(
