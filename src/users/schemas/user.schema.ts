@@ -75,7 +75,7 @@ export class UserConfiguration {
   @Prop({ default: null })
   zohoRefreshToken!: string;
 
-  @Prop({ default: null })
+  @Prop({ default: "EOD" })
   cronOption!: string;
 
   @Prop({ type: PortalSchema, default: null })
