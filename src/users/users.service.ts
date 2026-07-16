@@ -1,7 +1,18 @@
-import { Injectable, Logger, NotFoundException } from "@nestjs/common";
+import {
+  ArgumentsHost,
+  HttpException,
+  HttpStatus,
+  Inject,
+  Injectable,
+  Logger,
+  NotFoundException,
+  forwardRef,
+} from "@nestjs/common";
 import { InjectModel } from "@nestjs/mongoose";
 import { Model } from "mongoose";
 import { GoogleProfile } from "../auth/interfaces/google-profile.interface";
+import { HttpExceptionFilter } from "../common/httpExceptionFilter";
+import { ZohoService } from "../zoho/zoho.service";
 import { Portal, User, UserDocument } from "./schemas/user.schema";
 
 @Injectable()
@@ -9,8 +20,11 @@ export class UsersService {
   private readonly logger = new Logger(UsersService.name);
   constructor(
     @InjectModel(User.name) private readonly userModel: Model<UserDocument>,
+    @Inject(forwardRef(() => ZohoService))
+    private readonly zohoService: ZohoService,
+    private readonly httpExceptionFilter: HttpExceptionFilter,
   ) {}
-  findAll(){
+  findAll() {
     return this.userModel.find().exec();
   }
 
@@ -63,7 +77,7 @@ export class UsersService {
     return user.save();
   }
 
-  async udpateZohoDetails(
+  async updateZohoDetails(
     id: string,
     refreshToken: string,
     portalDetails: { id: string; portal_name: string },
@@ -86,7 +100,7 @@ export class UsersService {
     return user.save();
   }
 
-  async udpateZohoUser(id: string, zohoUserId: string) {
+  async updateZohoUser(id: string, zohoUserId: string) {
     let user = await this.findById(id);
     this.logger.debug("Fetched default zohoUserId", JSON.stringify(zohoUserId));
 
@@ -134,5 +148,68 @@ export class UsersService {
     user.configuration.projects = projects;
     user.configuration.defaultProject = defaultProject;
     return user.save();
+  }
+
+  async triggerJob() {
+    const users = await this.findAll();
+    const triggerCron = users.filter((user) => user.configuration.triggerCron);
+    const results = [];
+    this.logger.debug(
+      `Cron enabled users ${triggerCron.map((u) => u.email).join(";")}`,
+    );
+    for (const user of triggerCron) {
+      try {
+        let result: any;
+        result = await this.zohoService.triggerJob(user);
+        results.push({ email: user.email, success: true, result });
+      } catch (error) {
+        // Teleport exception to HttpExceptionFilter to trigger failure email
+        const exception = new HttpException(
+          {
+            message: error instanceof Error ? error.message : String(error),
+            email: user.email,
+            jobFailureTriggerRecipient:
+              user.configuration.jobFailureTriggerRecipient,
+            refreshToken: user.configuration.googleRefreshToken,
+            errors: [error instanceof Error ? error.stack : String(error)],
+          },
+          HttpStatus.INTERNAL_SERVER_ERROR,
+        );
+
+        const mockHost = {
+          switchToHttp: () => ({
+            getRequest: () => ({
+              url: `/api/v1/users/trigger/cron-job?email=${encodeURIComponent(user.email)}`,
+              method: "GET",
+            }),
+            getResponse: () => ({
+              status: () => ({
+                json: () => {},
+              }),
+            }),
+          }),
+        } as unknown as ArgumentsHost;
+
+        try {
+          await this.httpExceptionFilter.catch(exception, mockHost);
+        } catch (err) {
+          this.logger.error(
+            `Failed to execute HttpExceptionFilter manually for ${user.email}`,
+            err,
+          );
+        }
+
+        results.push({
+          email: user.email,
+          jobFailureTriggerRecipient:
+            user.configuration.jobFailureTriggerRecipient,
+          refreshToken: user.configuration.googleRefreshToken,
+          success: false,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+    this.logger.debug(`result ${JSON.stringify(results)}`);
+    return results;
   }
 }

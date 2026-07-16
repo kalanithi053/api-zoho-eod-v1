@@ -10,6 +10,7 @@ import express, { Request, Response } from "express";
 import { AppModule } from "../src/app.module";
 import { HttpExceptionFilter } from "../src/common/httpExceptionFilter";
 import { ResponseInterceptor } from "../src/common/interceptor";
+import { GoogleService } from "../src/google/google.service";
 
 let cachedApp: express.Express | null = null;
 
@@ -44,7 +45,7 @@ async function bootstrap(): Promise<express.Express> {
       transform: true,
     }),
   );
-  app.useGlobalFilters(new HttpExceptionFilter());
+  app.useGlobalFilters(new HttpExceptionFilter(app.get(GoogleService)));
   const swaggerConfig = new DocumentBuilder()
     .setTitle(`Eod Reportor - (${nodeEnv})`)
     .setDescription("Eod Reportor  API Documentation")

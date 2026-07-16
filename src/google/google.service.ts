@@ -64,7 +64,6 @@ export class GoogleService {
       email,
     );
     await transporter.verify();
-    console.log(configuration);
     const result = await transporter.sendMail({
       from: { address: email, name },
       subject,
@@ -79,13 +78,13 @@ export class GoogleService {
   }
 
   async getSheetRows(
-    accessToken: string,
-    range: string = "Sheet1!A:C",
+    user: UserDocument,
   ): Promise<{ task: string; duration: number }[]> {
-    const sheets = this.getSheetsClient(accessToken);
+    const { googleRefreshToken, sheet } = user.configuration;
+    const sheets = this.getSheetsClient(googleRefreshToken);
     const response = await sheets.spreadsheets.values.get({
-      spreadsheetId: this.getConfig("GOOGLE_SHEETS_ID"),
-      range,
+      spreadsheetId: sheet.id,
+      range: sheet.sheetTabName,
     });
 
     const [_header, ...rows] = (response.data.values as string[][]) ?? [];
