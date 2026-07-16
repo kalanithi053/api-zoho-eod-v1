@@ -80,7 +80,7 @@ export class UsersService {
   async updateZohoDetails(
     id: string,
     refreshToken: string,
-    portalDetails: { id: string; portal_name: string },
+    portalDetails: { id?: string; portal_name?: string },
   ) {
     let user = await this.findById(id);
     this.logger.debug(
@@ -93,8 +93,8 @@ export class UsersService {
     user.configuration.validatedZoho = true;
     user.configuration.zohoRefreshToken = refreshToken;
     user.configuration.portal = {
-      id: portalDetails?.id,
-      name: portalDetails?.portal_name,
+      id: portalDetails?.id ?? "",
+      name: portalDetails?.portal_name ?? "",
     };
 
     return user.save();
@@ -210,9 +210,10 @@ export class UsersService {
       }
     }
     this.logger.debug(`result ${JSON.stringify(results)}`);
-    return results?.map((v: any) => {
+    const res = results?.map((v: any) => {
       delete v.refreshToken;
       return v;
     });
+    return res;
   }
 }

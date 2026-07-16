@@ -81,28 +81,22 @@ export class GoogleService {
     user: UserDocument,
   ): Promise<{ task: string; duration: number }[]> {
     const { googleRefreshToken, sheet } = user.configuration;
+
     const sheets = this.getSheetsClient(googleRefreshToken);
     const response = await sheets.spreadsheets.values.get({
-      spreadsheetId: sheet.id,
-      range: sheet.sheetTabName,
+      spreadsheetId: sheet?.id ?? "",
+      range: sheet?.sheetTabName,
     });
-
     const [_header, ...rows] = (response.data.values as string[][]) ?? [];
+    this.logger.log(`${user.email} - ${JSON.stringify(response)}`);
+    this.logger.log(`${user.email} - ${JSON.stringify(rows)}`);
     const today = new Date().toISOString().split("T")[0];
 
-    const rowResult = rows
-      .filter(
-        (row) =>
-          row.length > 0 &&
-          row[2] === today &&
-          Boolean(row[0]) &&
-          !isNaN(Number(String(row[1]).trim())),
-      )
+    return rows
+      .filter((row) => row.length >= 3 && row[0] && row[2] === today)
       .map((row) => ({
         task: row[0],
         duration: Number(String(row[1]).trim()),
       }));
-    this.logger.debug(`respoonse from sheets ${JSON.stringify(rowResult)}`);
-    return rowResult;
   }
 }

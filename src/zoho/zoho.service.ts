@@ -56,12 +56,103 @@ export interface ZohoProject {
 }
 
 export interface ZohoTask {
+  project: Project;
+  milestone: Milestone;
+  tasklist: TaskList;
+  id: string;
+  prefix: string;
+  name: string;
+  status: Status;
+  priority: string;
+  owners_and_work: OwnersAndWork;
+  duration: Duration;
+  completion_percentage: number;
+  sequence: Sequence;
+  depth: number;
+  created_time: string;
+  last_modified_time: string;
+  is_completed: boolean;
+  created_via: string;
+  created_by: User;
+  updated_by: User;
+  billing_type: string;
+  log_hours: LogHours;
+  association_info: AssociationInfo;
+}
+
+export interface Project {
   id: string;
   name: string;
-  status?: {
-    id: string;
-    name: string;
-  };
+}
+
+export interface Milestone {
+  id: string;
+  name: string;
+}
+
+export interface TaskList {
+  id: string;
+  name: string;
+}
+
+export interface Status {
+  id: string;
+  name: string;
+  color: string;
+  color_hexcode: string;
+  is_closed_type: boolean;
+}
+
+export interface OwnersAndWork {
+  work_type: string;
+  total_work: string;
+  unit: string;
+  copy_task_duration: boolean;
+  owners: Owner[];
+  refresh_business_hours: boolean;
+}
+
+export interface Owner {
+  zuid: number;
+  zpuid: string;
+  name: string;
+  email: string;
+  first_name: string;
+  last_name: string;
+  work_values: string;
+}
+
+export interface Duration {
+  value: string;
+  type: string;
+}
+
+export interface Sequence {
+  sequence: number;
+}
+
+export interface User {
+  zuid: number;
+  zpuid: string;
+  name: string;
+  email: string;
+  first_name: string;
+  last_name: string;
+}
+
+export interface LogHours {
+  billable_hours: string;
+  non_billable_hours: string;
+  total_hours: string;
+}
+
+export interface AssociationInfo {
+  has_reminder: boolean;
+  has_recurrence: boolean;
+  has_comments: boolean;
+  has_attachments: boolean;
+  has_forums: boolean;
+  has_subtasks: boolean;
 }
 
 export interface TaskResponse {
@@ -137,7 +228,7 @@ export class ZohoService {
     await this.userService.updateZohoDetails(
       userId,
       response.refresh_token,
-      defaultPortal,
+      defaultPortal ?? {},
     );
 
     return response;
@@ -317,15 +408,25 @@ export class ZohoService {
   private findTaskByName(
     searchResult: ZohoTask[],
     taskName: string,
+    zohoUserId: string,
   ): ZohoTask | null {
-    const tasks: ZohoTask[] = searchResult ?? [];
+    const tasks = searchResult ?? [];
+
     return (
-      tasks.find(
-        (t) =>
-          decodeHtmlEntities(t.name).toLowerCase()?.trim() ===
-            decodeHtmlEntities(taskName).toLowerCase()?.trim() &&
-          t?.status?.id !== zohoTaskStatus.lockedStatus,
-      ) ?? null
+      tasks.find((t) => {
+        const isNameMatch =
+          decodeHtmlEntities(t.name).trim().toLowerCase() ===
+          decodeHtmlEntities(taskName).trim().toLowerCase();
+
+        const isNotLocked = t.status?.id !== zohoTaskStatus.lockedStatus;
+
+        const isOwner =
+          t.owners_and_work?.owners?.some(
+            (owner) => String(owner.zpuid) === String(zohoUserId),
+          ) ?? false;
+
+        return isNameMatch && isNotLocked && isOwner;
+      }) ?? null
     );
   }
 
@@ -352,11 +453,14 @@ export class ZohoService {
     );
     const result: any[] = [];
     for (const task of body) {
-      const existingTask = this.findTaskByName(taskList?.tasks, task.name);
-
+      const existingTask = this.findTaskByName(
+        taskList?.tasks,
+        task.name,
+        zohoUserId,
+      );
       const { duration, end_time, start_time, ...rest } = task;
       if (existingTask) {
-        this.logger.log(`Task already exists: ${task.name}`);
+        this.logger.log(`Task already exists: ${JSON.stringify(task)}`);
         result.push({ ...existingTask, duration, end_time, start_time });
         continue;
       }
@@ -470,19 +574,19 @@ export class ZohoService {
       start_time: data.startTime,
       end_time: data.endTime,
     }));
-    const portalId = user.configuration.portal.id;
+    const portalId = user?.configuration?.portal?.id;
     const responseTask = await this.postTask(
       {
-        portalId: portalId,
-        projectId: project.id ?? "",
+        portalId: portalId ?? "",
+        projectId: project?.id ?? "",
         body: taskpayload,
       },
       user,
     );
     const logOnTask = bulkUploadPayloadBuilder(responseTask, body, date);
     await this.postBulkLog(
-      portalId,
-      project.id ?? "",
+      portalId ?? "",
+      project?.id ?? "",
       logOnTask as TrackModuleBodyDto[],
       user,
     );
