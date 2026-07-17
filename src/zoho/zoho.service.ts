@@ -497,16 +497,21 @@ export class ZohoService {
     const accessToken = await this.generateAccessToken(zohoRefreshToken);
     const formData = new FormData();
     formData.append("log_object", JSON.stringify(body));
+    // Do NOT manually set Content-Type — axios must set it automatically
+    // so that the multipart boundary is included in the header.
     const result = await this.requestZohoProject<any>(accessToken, {
       url: `portal/${portalId}/addbulktimelogs`,
       method: "POST",
       data: formData,
-      headers: {
-        "Content-Type": "multipart/form-data",
-      },
     });
 
-    this.logger.log(`Bulk log added: ${JSON.stringify(result)}`);
+    if (result?.error) {
+      this.logger.error(
+        `Bulk log failed with error: ${JSON.stringify(result)}`,
+      );
+    } else {
+      this.logger.log(`Bulk log added: ${JSON.stringify(result)}`);
+    }
     return result;
   }
 

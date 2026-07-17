@@ -77,9 +77,7 @@ export class GoogleService {
     return result;
   }
 
-  async getSheetRows(
-    user: UserDocument,
-  ): Promise<{ task: string; duration: number }[]> {
+  async getSheetRows(user: UserDocument): Promise<any> {
     const { googleRefreshToken, sheet } = user.configuration;
 
     const sheets = this.getSheetsClient(googleRefreshToken);

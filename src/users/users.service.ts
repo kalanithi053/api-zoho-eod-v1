@@ -150,6 +150,36 @@ export class UsersService {
     return user.save();
   }
 
+  private createMockHost(email: string): ArgumentsHost {
+    return {
+      switchToHttp: () => ({
+        getRequest: () => ({
+          url: `/api/v1/users/trigger/cron-job?email=${email}`,
+          method: "GET",
+        }),
+        getResponse: () => ({
+          status: () => ({
+            json: () => {},
+          }),
+        }),
+      }),
+    } as unknown as ArgumentsHost;
+  }
+
+  private createJobFailureException(user: any, error: unknown): HttpException {
+    return new HttpException(
+      {
+        message: error instanceof Error ? error.message : String(error),
+        email: user.email,
+        jobFailureTriggerRecipient:
+          user.configuration.jobFailureTriggerRecipient,
+        refreshToken: user.configuration.googleRefreshToken,
+        errors: [error instanceof Error ? error.stack : String(error)],
+      },
+      HttpStatus.INTERNAL_SERVER_ERROR,
+    );
+  }
+
   async triggerJob() {
     const users = await this.findAll();
     const triggerCron = users.filter((user) => user.configuration.triggerCron);
@@ -163,37 +193,13 @@ export class UsersService {
         result = await this.zohoService.triggerJob(user);
         results.push({ email: user.email, success: true, result });
       } catch (error) {
-        // Teleport exception to HttpExceptionFilter to trigger failure email
-        const exception = new HttpException(
-          {
-            message: error instanceof Error ? error.message : String(error),
-            email: user.email,
-            jobFailureTriggerRecipient:
-              user.configuration.jobFailureTriggerRecipient,
-            refreshToken: user.configuration.googleRefreshToken,
-            errors: [error instanceof Error ? error.stack : String(error)],
-          },
-          HttpStatus.INTERNAL_SERVER_ERROR,
-        );
-
-        const mockHost = {
-          switchToHttp: () => ({
-            getRequest: () => ({
-              url: `/api/v1/users/trigger/cron-job?email=${encodeURIComponent(user.email)}`,
-              method: "GET",
-            }),
-            getResponse: () => ({
-              status: () => ({
-                json: () => {},
-              }),
-            }),
-          }),
-        } as unknown as ArgumentsHost;
+        const exception = this.createJobFailureException(user, error);
+        const mockHost = this.createMockHost(user.email);
 
         try {
           await this.httpExceptionFilter.catch(exception, mockHost);
         } catch (err) {
-          this.logger.error(
+          this.logger.debug(
             `Failed to execute HttpExceptionFilter manually for ${user.email}`,
             err,
           );
